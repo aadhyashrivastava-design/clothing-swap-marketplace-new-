@@ -1,89 +1,179 @@
 import os
-import uuid
+import traceback
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, session
-from database import get_db, init_db, calculate_barter_score
-from models import haversine_distance_miles, evaluate_swap_fairness, get_eco_equivalencies
+from database import get_db, init_db
+from models import haversine_distance_km, compare_swap_values
 
 app = Flask(__name__)
-app.secret_key = 'ecoswap-super-secret-sustainable-key-2024'
+app.secret_key = 'ecoswap-indian-sustainable-fashion-key-2024'
 
-# Ensure DB is created on startup
+@app.errorhandler(Exception)
+def handle_exception(e):
+    traceback.print_exc()
+    return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+
+# Initialize database on startup
 with app.app_context():
     init_db()
 
-def get_current_user_id():
-    # Default to user 1 (Maya Lin) if not set in session
-    return session.get('user_id', 1)
+def get_logged_in_user():
+    user_id = session.get('user_id')
+    if not user_id:
+        return None
+    conn = get_db()
+    user = conn.execute('SELECT id, name, email, phone, city, area, avatar_url, swaps_completed, joined_date FROM users WHERE id = ?', (user_id,)).fetchone()
+    conn.close()
+    return dict(user) if user else None
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# ----------------- User Endpoints -----------------
+# ==========================================
+# AUTHENTICATION (LOGIN / REGISTER / LOGOUT)
+# ==========================================
 
 @app.route('/api/me', methods=['GET'])
-def get_current_user():
-    user_id = get_current_user_id()
+def api_me():
+    user = get_logged_in_user()
+    if user:
+        return jsonify({'logged_in': True, 'user': user})
+    return jsonify({'logged_in': False, 'user': None})
+
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.json or {}
+    email = data.get('email', '').strip().lower()
+    password = data.get('password', '').strip()
+
+    if not email or not password:
+        return jsonify({'error': 'Please enter both Email and Password'}), 400
+
+    conn = get_db()
+    user = conn.execute('SELECT * FROM users WHERE LOWER(email) = ?', (email,)).fetchone()
+    conn.close()
+
+    if not user or user['password'] != password:
+        return jsonify({'error': 'Invalid Email or Password. (Hint: Demo password is 123)'}), 401
+
+    session['user_id'] = user['id']
+    user_dict = {
+        'id': user['id'],
+        'name': user['name'],
+        'email': user['email'],
+        'phone': user['phone'],
+        'city': user['city'],
+        'area': user['area'],
+        'avatar_url': user['avatar_url'],
+        'swaps_completed': user['swaps_completed'],
+        'joined_date': user['joined_date']
+    }
+    return jsonify({'success': True, 'user': user_dict})
+
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    data = request.json or {}
+    name = data.get('name', '').strip()
+    email = data.get('email', '').strip().lower()
+    password = data.get('password', '').strip()
+    phone = data.get('phone', '').strip()
+    city = data.get('city', 'Bangalore').strip()
+    area = data.get('area', 'Indiranagar').strip()
+
+    if not name or not email or not password:
+        return jsonify({'error': 'Name, Email, and Password are required'}), 400
+
+    conn = get_db()
+    existing = conn.execute('SELECT id FROM users WHERE LOWER(email) = ?', (email,)).fetchone()
+    if existing:
+        conn.close()
+        return jsonify({'error': 'An account with this email already exists. Please log in.'}), 400
+
+    avatar_url = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80'
+    joined = datetime.now().strftime('%B %Y')
+
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO users (name, email, password, phone, city, area, avatar_url, swaps_completed, joined_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+    ''', (name, email, password, phone, city, area, avatar_url, joined))
+    new_user_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    session['user_id'] = new_user_id
+    return jsonify({
+        'success': True,
+        'user': {
+            'id': new_user_id,
+            'name': name,
+            'email': email,
+            'phone': phone,
+            'city': city,
+            'area': area,
+            'avatar_url': avatar_url,
+            'swaps_completed': 0,
+            'joined_date': joined
+        }
+    }), 201
+
+@app.route('/api/logout', methods=['POST'])
+def api_logout():
+    session.pop('user_id', None)
+    return jsonify({'success': True})
+
+@app.route('/api/demo-login/<int:user_id>', methods=['POST'])
+def api_demo_login(user_id):
     conn = get_db()
     user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
     conn.close()
     if not user:
-        return jsonify({'error': 'User not found'}), 404
-    return jsonify(dict(user))
+        return jsonify({'error': 'Demo user not found'}), 404
 
-@app.route('/api/switch-user', methods=['POST'])
-def switch_user():
-    data = request.json or {}
-    new_user_id = data.get('user_id')
-    conn = get_db()
-    user = conn.execute('SELECT * FROM users WHERE id = ?', (new_user_id,)).fetchone()
-    conn.close()
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-    
-    session['user_id'] = new_user_id
-    return jsonify({'success': True, 'user': dict(user)})
+    session['user_id'] = user['id']
+    user_dict = {
+        'id': user['id'],
+        'name': user['name'],
+        'email': user['email'],
+        'phone': user['phone'],
+        'city': user['city'],
+        'area': user['area'],
+        'avatar_url': user['avatar_url'],
+        'swaps_completed': user['swaps_completed'],
+        'joined_date': user['joined_date']
+    }
+    return jsonify({'success': True, 'user': user_dict})
 
-@app.route('/api/users', methods=['GET'])
-def list_users():
-    conn = get_db()
-    users = conn.execute('SELECT id, username, name, avatar_url, bio, address, rating, swaps_completed, eco_credits FROM users').fetchall()
-    conn.close()
-    return jsonify([dict(u) for u in users])
-
-# ----------------- Items & Marketplace -----------------
+# ==========================================
+# CLOTHING ITEMS & MARKETPLACE
+# ==========================================
 
 @app.route('/api/items', methods=['GET'])
-def get_marketplace_items():
-    current_uid = get_current_user_id()
-    conn = get_db()
-    
-    # Get current user coordinates
-    current_user = conn.execute('SELECT latitude, longitude FROM users WHERE id = ?', (current_uid,)).fetchone()
-    user_lat = current_user['latitude'] if current_user else 47.6150
-    user_lon = current_user['longitude'] if current_user else -122.3200
+def get_items():
+    current_user = get_logged_in_user()
+    current_uid = current_user['id'] if current_user else 0
 
-    # Query params
+    conn = get_db()
+
+    # Filters
     category = request.args.get('category')
     gender = request.args.get('gender')
-    size = request.args.get('size')
     condition = request.args.get('condition')
     search = request.args.get('search')
-    max_dist = request.args.get('max_distance', type=float)
     sort_by = request.args.get('sort', 'newest')
-    include_own = request.args.get('include_own', 'false').lower() == 'true'
 
     query = '''
         SELECT items.*, users.name as owner_name, users.avatar_url as owner_avatar,
-               users.rating as owner_rating, users.swaps_completed as owner_swaps
+               users.city as owner_city, users.area as owner_area, users.swaps_completed as owner_swaps
         FROM items
         JOIN users ON items.user_id = users.id
         WHERE items.status = 'available'
     '''
     params = []
 
-    if not include_own:
+    # Don't show your own items in marketplace if logged in
+    if current_uid:
         query += ' AND items.user_id != ?'
         params.append(current_uid)
 
@@ -95,167 +185,119 @@ def get_marketplace_items():
         query += ' AND items.gender = ?'
         params.append(gender)
 
-    if size and size != 'All':
-        query += ' AND items.size = ?'
-        params.append(size)
-
     if condition and condition != 'All':
         query += ' AND items.condition = ?'
         params.append(condition)
 
     if search:
         search_like = f"%{search.strip()}%"
-        query += ' AND (items.title LIKE ? OR items.brand LIKE ? OR items.description LIKE ? OR items.material LIKE ?)'
+        query += ' AND (items.title LIKE ? OR items.brand LIKE ? OR items.description LIKE ? OR items.area LIKE ?)'
         params.extend([search_like, search_like, search_like, search_like])
+
+    if sort_by == 'price_low':
+        query += ' ORDER BY items.price_inr ASC'
+    elif sort_by == 'price_high':
+        query += ' ORDER BY items.price_inr DESC'
+    else: # newest
+        query += ' ORDER BY items.id DESC'
 
     rows = conn.execute(query, params).fetchall()
     conn.close()
 
-    items = []
-    for r in rows:
-        item = dict(r)
-        # Compute distance to current user
-        dist = haversine_distance_miles(user_lat, user_lon, item['latitude'], item['longitude'])
-        item['distance_miles'] = dist
-        
-        # Distance filter if applied
-        if max_dist and dist > max_dist:
-            continue
-        items.append(item)
-
-    # Sorting
-    if sort_by == 'nearest':
-        items.sort(key=lambda x: x['distance_miles'])
-    elif sort_by == 'value_high':
-        items.sort(key=lambda x: x['barter_score'], reverse=True)
-    elif sort_by == 'value_low':
-        items.sort(key=lambda x: x['barter_score'])
-    else:  # newest
-        items.sort(key=lambda x: x['id'], reverse=True)
-
+    items = [dict(r) for r in rows]
     return jsonify(items)
 
 @app.route('/api/items/<int:item_id>', methods=['GET'])
-def get_item_detail(item_id):
-    current_uid = get_current_user_id()
+def get_single_item(item_id):
     conn = get_db()
-    current_user = conn.execute('SELECT latitude, longitude FROM users WHERE id = ?', (current_uid,)).fetchone()
-    
-    item_row = conn.execute('''
+    row = conn.execute('''
         SELECT items.*, users.name as owner_name, users.avatar_url as owner_avatar,
-               users.rating as owner_rating, users.swaps_completed as owner_swaps,
-               users.address as owner_address, users.bio as owner_bio
+               users.city as owner_city, users.area as owner_area, users.swaps_completed as owner_swaps
         FROM items
         JOIN users ON items.user_id = users.id
         WHERE items.id = ?
     ''', (item_id,)).fetchone()
     conn.close()
 
-    if not item_row:
+    if not row:
         return jsonify({'error': 'Item not found'}), 404
-
-    item = dict(item_row)
-    if current_user:
-        item['distance_miles'] = haversine_distance_miles(
-            current_user['latitude'], current_user['longitude'],
-            item['latitude'], item['longitude']
-        )
-    return jsonify(item)
+    return jsonify(dict(row))
 
 @app.route('/api/wardrobe', methods=['GET'])
 def get_my_wardrobe():
-    user_id = get_current_user_id()
+    user = get_logged_in_user()
+    if not user:
+        return jsonify([])
+
     conn = get_db()
-    rows = conn.execute('''
-        SELECT * FROM items WHERE user_id = ? ORDER BY id DESC
-    ''', (user_id,)).fetchall()
+    rows = conn.execute('SELECT * FROM items WHERE user_id = ? ORDER BY id DESC', (user['id'],)).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
 @app.route('/api/items', methods=['POST'])
-def add_new_item():
-    user_id = get_current_user_id()
-    data = request.json or {}
+def add_new_garment():
+    user = get_logged_in_user()
+    if not user:
+        return jsonify({'error': 'Please login to list items in your wardrobe'}), 401
 
+    data = request.json or {}
     title = data.get('title', '').strip()
-    category = data.get('category', 'Tops & Shirts')
+    category = data.get('category', 'T-Shirts & Tops')
     gender = data.get('gender', 'Unisex')
     size = data.get('size', 'M')
     brand = data.get('brand', 'Independent')
-    condition = data.get('condition', 'Gently Used')
+    condition = data.get('condition', 'Like New')
     material = data.get('material', 'Cotton')
-    estimated_value = float(data.get('estimated_value', 45.0) or 45.0)
-    swap_preference = data.get('swap_preference', 'Open to fair trades')
+    price_inr = int(data.get('price_inr', 999) or 999)
+    swap_preference = data.get('swap_preference', 'Open to any fair swap')
     description = data.get('description', '')
     image_url = data.get('image_url') or 'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=800&auto=format&fit=crop&q=80'
 
     if not title:
-        return jsonify({'error': 'Title is required'}), 400
+        return jsonify({'error': 'Please enter a title for your item'}), 400
 
+    now = datetime.now().strftime('%d %b, %I:%M %p')
+    
     conn = get_db()
-    user = conn.execute('SELECT address, latitude, longitude FROM users WHERE id = ?', (user_id,)).fetchone()
-    
-    barter_score = calculate_barter_score(brand, condition, material, estimated_value)
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    
-    # Calculate eco savings based on category
-    eco_metrics = {
-        'Jackets & Coats': (4500, 15.0),
-        'Pants & Jeans': (7500, 18.0),
-        'Sweaters & Knits': (3200, 10.0),
-        'Dresses & Jumpsuits': (3400, 8.5),
-        'Shoes': (5000, 20.0),
-        'Tops & Shirts': (2700, 7.5),
-        'Accessories': (1200, 3.0)
-    }
-    water_l, co2_kg = eco_metrics.get(category, (2700, 8.0))
-
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO items (
             user_id, title, description, category, gender, size, brand, condition, material,
-            estimated_value, barter_score, swap_preference, image_url, status, address,
-            latitude, longitude, water_saved_l, co2_saved_kg, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'available', ?, ?, ?, ?, ?, ?)
+            price_inr, swap_preference, image_url, status, city, area, water_saved_l, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'available', ?, ?, 2700, ?)
     ''', (
-        user_id, title, description, category, gender, size, brand, condition, material,
-        estimated_value, barter_score, swap_preference, image_url,
-        user['address'] if user else 'Capitol Hill, Seattle, WA',
-        user['latitude'] if user else 47.6150,
-        user['longitude'] if user else -122.3200,
-        water_l, co2_kg, now
+        user['id'], title, description, category, gender, size, brand, condition, material,
+        price_inr, swap_preference, image_url, user['city'], user['area'], now
     ))
-    
-    # Reward user with 15 Eco-Credits for listing an item!
-    conn.execute('UPDATE users SET eco_credits = eco_credits + 15 WHERE id = ?', (user_id,))
-    
     new_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
-    return jsonify({'success': True, 'item_id': new_id, 'barter_score': barter_score, 'earned_credits': 15}), 201
+    return jsonify({'success': True, 'item_id': new_id}), 201
 
 @app.route('/api/items/<int:item_id>', methods=['DELETE'])
-def delete_item(item_id):
-    user_id = get_current_user_id()
-    conn = get_db()
-    item = conn.execute('SELECT * FROM items WHERE id = ? AND user_id = ?', (item_id, user_id)).fetchone()
-    if not item:
-        conn.close()
-        return jsonify({'error': 'Item not found or unauthorized'}), 404
+def delete_my_item(item_id):
+    user = get_logged_in_user()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
 
-    conn.execute('DELETE FROM items WHERE id = ?', (item_id,))
+    conn = get_db()
+    conn.execute('DELETE FROM items WHERE id = ? AND user_id = ?', (item_id, user['id']))
     conn.commit()
     conn.close()
     return jsonify({'success': True})
 
-# ----------------- Value-Based Swap Recommendation Engine -----------------
+# ==========================================
+# VALUE-BASED SWAP COMPARISON (INR ₹)
+# ==========================================
 
 @app.route('/api/fair-match/<int:target_item_id>', methods=['GET'])
-def get_fair_swap_recommendations(target_item_id):
-    user_id = get_current_user_id()
+def get_fair_matches(target_item_id):
+    user = get_logged_in_user()
+    if not user:
+        return jsonify({'error': 'Please login to propose swaps'}), 401
+
     conn = get_db()
-    
     target_row = conn.execute('SELECT * FROM items WHERE id = ?', (target_item_id,)).fetchone()
     if not target_row:
         conn.close()
@@ -263,45 +305,45 @@ def get_fair_swap_recommendations(target_item_id):
 
     target_item = dict(target_row)
     
-    # Get current user's available items
-    user_items = conn.execute('''
-        SELECT * FROM items WHERE user_id = ? AND status = 'available'
-    ''', (user_id,)).fetchall()
+    # Get user's available items
+    my_items = conn.execute('SELECT * FROM items WHERE user_id = ? AND status = "available"', (user['id'],)).fetchall()
     conn.close()
 
     matches = []
-    for u_row in user_items:
-        u_item = dict(u_row)
-        fairness = evaluate_swap_fairness(u_item['barter_score'], target_item['barter_score'])
+    for row in my_items:
+        my_item = dict(row)
+        comparison = compare_swap_values(my_item['price_inr'], target_item['price_inr'])
         matches.append({
-            'my_item': u_item,
-            'target_item': target_item,
-            'fairness': fairness
+            'my_item': my_item,
+            'comparison': comparison
         })
 
-    # Sort best match first
-    matches.sort(key=lambda m: m['fairness']['fairness_pct'], reverse=True)
+    # Sort best value match first
+    matches.sort(key=lambda m: m['comparison']['difference_inr'])
+
     return jsonify({
         'target_item': target_item,
         'matches': matches
     })
 
-# ----------------- Swap Proposals & Trade Lifecycle -----------------
+# ==========================================
+# SWAP PROPOSALS & MANAGEMENT
+# ==========================================
 
 @app.route('/api/swaps', methods=['GET'])
 def get_user_swaps():
-    user_id = get_current_user_id()
+    user = get_logged_in_user()
+    if not user:
+        return jsonify([])
+
     conn = get_db()
-    
     query = '''
         SELECT 
             sr.*,
-            req.name as requester_name, req.avatar_url as requester_avatar,
-            rec.name as receiver_name, rec.avatar_url as receiver_avatar,
-            off_item.title as offered_title, off_item.image_url as offered_image, 
-            off_item.barter_score as offered_score, off_item.size as offered_size,
-            req_item.title as requested_title, req_item.image_url as requested_image,
-            req_item.barter_score as requested_score, req_item.size as requested_size
+            req.name as requester_name, req.avatar_url as requester_avatar, req.city as requester_city, req.area as requester_area,
+            rec.name as receiver_name, rec.avatar_url as receiver_avatar, rec.city as receiver_city, rec.area as receiver_area,
+            off_item.title as offered_title, off_item.image_url as offered_image, off_item.price_inr as offered_price, off_item.size as offered_size,
+            req_item.title as requested_title, req_item.image_url as requested_image, req_item.price_inr as requested_price, req_item.size as requested_size
         FROM swap_requests sr
         JOIN users req ON sr.requester_id = req.id
         JOIN users rec ON sr.receiver_id = rec.id
@@ -310,83 +352,81 @@ def get_user_swaps():
         WHERE sr.requester_id = ? OR sr.receiver_id = ?
         ORDER BY sr.id DESC
     '''
-    rows = conn.execute(query, (user_id, user_id)).fetchall()
+    rows = conn.execute(query, (user['id'], user['id'])).fetchall()
     conn.close()
 
     swaps = []
     for r in rows:
-        swap = dict(r)
-        swap['is_requester'] = (swap['requester_id'] == user_id)
-        fairness = evaluate_swap_fairness(swap['offered_score'], swap['requested_score'])
-        swap['fairness_pct'] = fairness['fairness_pct']
-        swap['fairness_verdict'] = fairness['verdict']
-        swaps.append(swap)
+        s = dict(r)
+        s['is_requester'] = (s['requester_id'] == user['id'])
+        s['comparison'] = compare_swap_values(s['offered_price'], s['requested_price'])
+        swaps.append(s)
 
     return jsonify(swaps)
 
 @app.route('/api/swaps/propose', methods=['POST'])
-def propose_swap():
-    user_id = get_current_user_id()
-    data = request.json or {}
+def propose_swap_request():
+    user = get_logged_in_user()
+    if not user:
+        return jsonify({'error': 'Please login to send swap requests'}), 401
 
+    data = request.json or {}
     requested_item_id = data.get('requested_item_id')
     offered_item_id = data.get('offered_item_id')
-    additional_credits = int(data.get('additional_credits', 0) or 0)
+    extra_cash_inr = int(data.get('extra_cash_inr', 0) or 0)
     note = data.get('note', '')
-    meet_location = data.get('meet_location', 'Community Eco Hub')
-    meet_time = data.get('meet_time', 'Weekend Afternoon')
+    meet_location = data.get('meet_location', 'Nearby Metro Station or Cafe')
 
     if not requested_item_id or not offered_item_id:
-        return jsonify({'error': 'Both offered and requested items are required'}), 400
+        return jsonify({'error': 'Please select an item to offer for swap'}), 400
 
     conn = get_db()
-    # Validate requested item
     req_item = conn.execute('SELECT * FROM items WHERE id = ? AND status = "available"', (requested_item_id,)).fetchone()
     if not req_item:
         conn.close()
-        return jsonify({'error': 'Requested item is no longer available'}), 400
+        return jsonify({'error': 'The requested item is no longer available'}), 400
 
-    if req_item['user_id'] == user_id:
+    if req_item['user_id'] == user['id']:
         conn.close()
         return jsonify({'error': 'You cannot swap with your own item'}), 400
 
-    # Validate offered item belongs to user
-    off_item = conn.execute('SELECT * FROM items WHERE id = ? AND user_id = ? AND status = "available"', (offered_item_id, user_id)).fetchone()
+    off_item = conn.execute('SELECT * FROM items WHERE id = ? AND user_id = ? AND status = "available"', (offered_item_id, user['id'])).fetchone()
     if not off_item:
         conn.close()
-        return jsonify({'error': 'Offered item is invalid or not in your wardrobe'}), 400
+        return jsonify({'error': 'Selected offer item is not in your available wardrobe'}), 400
 
     receiver_id = req_item['user_id']
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
-    qr_token = f"SWAP-{uuid.uuid4().hex[:8].upper()}"
+    now = datetime.now().strftime('%d %b, %I:%M %p')
 
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO swap_requests (
             requester_id, receiver_id, offered_item_id, requested_item_id,
-            additional_credits, note, status, meet_location, meet_time, qr_code_token, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)
+            extra_cash_inr, note, status, meet_location, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
     ''', (
-        user_id, receiver_id, offered_item_id, requested_item_id,
-        additional_credits, note, meet_location, meet_time, qr_token, now, now
+        user['id'], receiver_id, offered_item_id, requested_item_id,
+        extra_cash_inr, note, meet_location, now, now
     ))
     new_swap_id = cursor.lastrowid
 
-    # Add initial note as chat message
     if note:
         cursor.execute('''
             INSERT INTO swap_messages (swap_id, sender_id, message, created_at)
             VALUES (?, ?, ?, ?)
-        ''', (new_swap_id, user_id, note, now))
+        ''', (new_swap_id, user['id'], note, now))
 
     conn.commit()
     conn.close()
 
-    return jsonify({'success': True, 'swap_id': new_swap_id, 'token': qr_token}), 201
+    return jsonify({'success': True, 'swap_id': new_swap_id}), 201
 
 @app.route('/api/swaps/<int:swap_id>/action', methods=['POST'])
-def update_swap_action(swap_id):
-    user_id = get_current_user_id()
+def update_swap_status(swap_id):
+    user = get_logged_in_user()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+
     data = request.json or {}
     action = data.get('action') # 'accept', 'decline', 'complete', 'cancel'
 
@@ -396,75 +436,59 @@ def update_swap_action(swap_id):
         conn.close()
         return jsonify({'error': 'Swap request not found'}), 404
 
-    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    now = datetime.now().strftime('%d %b, %I:%M %p')
 
     if action == 'accept':
-        if swap['receiver_id'] != user_id:
+        if swap['receiver_id'] != user['id']:
             conn.close()
-            return jsonify({'error': 'Only the receiver can accept this proposal'}), 403
-        
+            return jsonify({'error': 'Only receiver can accept this proposal'}), 403
         conn.execute('UPDATE swap_requests SET status = "accepted", updated_at = ? WHERE id = ?', (now, swap_id))
-        # Mark both items as pending_swap
         conn.execute('UPDATE items SET status = "pending_swap" WHERE id IN (?, ?)', (swap['offered_item_id'], swap['requested_item_id']))
         conn.commit()
 
     elif action == 'decline':
-        if swap['receiver_id'] != user_id:
+        if swap['receiver_id'] != user['id']:
             conn.close()
-            return jsonify({'error': 'Only the receiver can decline this proposal'}), 403
-        
+            return jsonify({'error': 'Only receiver can decline this proposal'}), 403
         conn.execute('UPDATE swap_requests SET status = "declined", updated_at = ? WHERE id = ?', (now, swap_id))
         conn.commit()
 
+    elif action == 'complete':
+        # Mark swap completed and exchange ownership of clothes
+        conn.execute('UPDATE swap_requests SET status = "completed", updated_at = ? WHERE id = ?', (now, swap_id))
+        conn.execute('UPDATE items SET status = "available", user_id = ? WHERE id = ?', (swap['receiver_id'], swap['offered_item_id']))
+        conn.execute('UPDATE items SET status = "available", user_id = ? WHERE id = ?', (swap['requester_id'], swap['requested_item_id']))
+        conn.execute('UPDATE users SET swaps_completed = swaps_completed + 1 WHERE id IN (?, ?)', (swap['requester_id'], swap['receiver_id']))
+        conn.commit()
+
     elif action == 'cancel':
-        if swap['requester_id'] != user_id and swap['receiver_id'] != user_id:
-            conn.close()
-            return jsonify({'error': 'Unauthorized'}), 403
-        
         conn.execute('UPDATE swap_requests SET status = "cancelled", updated_at = ? WHERE id = ?', (now, swap_id))
-        # Revert items back to available
         conn.execute('UPDATE items SET status = "available" WHERE id IN (?, ?)', (swap['offered_item_id'], swap['requested_item_id']))
         conn.commit()
 
-    elif action == 'complete':
-        # Handshake / QR confirmation to complete barter!
-        if swap['status'] not in ('accepted', 'pending'):
-            conn.close()
-            return jsonify({'error': 'Swap is not ready to complete'}), 400
-
-        conn.execute('UPDATE swap_requests SET status = "completed", updated_at = ? WHERE id = ?', (now, swap_id))
-        # Mark items as swapped
-        conn.execute('UPDATE items SET status = "swapped" WHERE id IN (?, ?)', (swap['offered_item_id'], swap['requested_item_id']))
-        # Swap ownership of items
-        conn.execute('UPDATE items SET user_id = ? WHERE id = ?', (swap['receiver_id'], swap['offered_item_id']))
-        conn.execute('UPDATE items SET user_id = ? WHERE id = ?', (swap['requester_id'], swap['requested_item_id']))
-        
-        # Increment completed swaps & award 25 Eco-Credits to each participant!
-        conn.execute('UPDATE users SET swaps_completed = swaps_completed + 1, eco_credits = eco_credits + 25 WHERE id IN (?, ?)', (swap['requester_id'], swap['receiver_id']))
-        conn.commit()
-
     conn.close()
-    return jsonify({'success': True, 'action': action})
+    return jsonify({'success': True})
 
 @app.route('/api/swaps/<int:swap_id>/messages', methods=['GET', 'POST'])
-def handle_swap_messages(swap_id):
-    user_id = get_current_user_id()
+def swap_messages(swap_id):
+    user = get_logged_in_user()
+    if not user:
+        return jsonify({'error': 'Unauthorized'}), 401
+
     conn = get_db()
-    
     if request.method == 'POST':
         data = request.json or {}
-        text = data.get('message', '').strip()
-        if not text:
+        msg = data.get('message', '').strip()
+        if not msg:
             conn.close()
             return jsonify({'error': 'Message cannot be empty'}), 400
-        
-        now = datetime.now().strftime('%Y-%m-%d %H:%M')
-        conn.execute('INSERT INTO swap_messages (swap_id, sender_id, message, created_at) VALUES (?, ?, ?, ?)', (swap_id, user_id, text, now))
+        now = datetime.now().strftime('%d %b, %I:%M %p')
+        conn.execute('INSERT INTO swap_messages (swap_id, sender_id, message, created_at) VALUES (?, ?, ?, ?)', (swap_id, user['id'], msg, now))
         conn.commit()
         conn.close()
         return jsonify({'success': True})
 
-    # GET messages
+    # GET
     rows = conn.execute('''
         SELECT sm.*, u.name as sender_name, u.avatar_url as sender_avatar
         FROM swap_messages sm
@@ -477,79 +501,40 @@ def handle_swap_messages(swap_id):
     msgs = []
     for r in rows:
         m = dict(r)
-        m['is_me'] = (m['sender_id'] == user_id)
+        m['is_me'] = (m['sender_id'] == user['id'])
         msgs.append(m)
     return jsonify(msgs)
 
-# ----------------- Eco Hubs & Platform Metrics -----------------
+# ==========================================
+# ECO STATS & MEETING HUBS
+# ==========================================
 
 @app.route('/api/eco-hubs', methods=['GET'])
-def get_eco_hubs():
+def get_hubs():
     conn = get_db()
     rows = conn.execute('SELECT * FROM eco_hubs').fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 
 @app.route('/api/eco-impact', methods=['GET'])
-def get_eco_impact():
-    user_id = get_current_user_id()
+def get_impact():
     conn = get_db()
-
-    # Platform Totals
-    platform_stats = conn.execute('''
-        SELECT 
-            COUNT(id) as total_items_listed,
-            COALESCE(SUM(water_saved_l), 0) as total_water_saved,
-            COALESCE(SUM(co2_saved_kg), 0.0) as total_co2_saved
-        FROM items
-    ''').fetchone()
-
-    total_swaps = conn.execute('''
-        SELECT COUNT(id) FROM swap_requests WHERE status = "completed"
-    ''').fetchone()[0]
-
-    # User Personal Impact
-    user_stats = conn.execute('''
-        SELECT 
-            COUNT(id) as my_items,
-            COALESCE(SUM(water_saved_l), 0) as my_water_saved,
-            COALESCE(SUM(co2_saved_kg), 0.0) as my_co2_saved
-        FROM items WHERE user_id = ?
-    ''', (user_id,)).fetchone()
-
-    user_info = conn.execute('SELECT swaps_completed, eco_credits FROM users WHERE id = ?', (user_id,)).fetchone()
+    total_items = conn.execute('SELECT COUNT(*) FROM items').fetchone()[0]
+    total_swaps = conn.execute('SELECT COUNT(*) FROM swap_requests WHERE status = "completed"').fetchone()[0]
     conn.close()
 
-    platform_equiv = get_eco_equivalencies(
-        platform_stats['total_water_saved'],
-        platform_stats['total_co2_saved'],
-        platform_stats['total_items_listed']
-    )
-    user_equiv = get_eco_equivalencies(
-        user_stats['my_water_saved'],
-        user_stats['my_co2_saved'],
-        user_stats['my_items']
-    )
+    water_saved = (total_items * 2700) + (total_swaps * 5400)
+    co2_saved = round((total_items * 8.5) + (total_swaps * 17.0), 1)
 
     return jsonify({
-        'platform': {
-            'items_listed': platform_stats['total_items_listed'],
-            'completed_swaps': total_swaps + 18, # including historical community swaps
-            'water_saved_l': platform_stats['total_water_saved'] + 54000,
-            'co2_saved_kg': round(platform_stats['total_co2_saved'] + 175.0, 1),
-            'equivalencies': platform_equiv
-        },
-        'personal': {
-            'items_listed': user_stats['my_items'],
-            'swaps_completed': user_info['swaps_completed'] if user_info else 0,
-            'eco_credits': user_info['eco_credits'] if user_info else 0,
-            'water_saved_l': user_stats['my_water_saved'],
-            'co2_saved_kg': round(user_stats['my_co2_saved'], 1),
-            'equivalencies': user_equiv
-        }
+        'total_items': total_items,
+        'total_swaps': total_swaps + 14,
+        'water_saved_liters': water_saved,
+        'co2_saved_kg': co2_saved,
+        'trees_equivalent': round(co2_saved / 0.06)
     })
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
-    print(f"Starting EcoSwap on http://127.0.0.1:{port} and http://localhost:{port} ...")
+    print(f"EcoSwap India running at http://127.0.0.1:{port} and http://localhost:{port}")
     app.run(host='0.0.0.0', port=port, debug=False)
