@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EcoSwap | Sustainable Clothing Exchange & Barter Marketplace</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        emerald: {
+                            50: '#ecfdf5',
+                            100: '#d1fae5',
+                            500: '#10b981',
+                            600: '#059669',
+                            700: '#047857',
+                            800: '#065f46',
+                            900: '#064e3b',
+                        },
+                        earth: {
+                            50: '#faf8f5',
+                            100: '#f5efe6',
+                            200: '#e6dac8',
+                            600: '#8c7355',
+                            800: '#4a3b2c',
+                            900: '#2b2219',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
+                        display: ['Outfit', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Leaflet Map CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/custom.css">
+</head>
+<body class="bg-[#f8f9fa] text-slate-800 antialiased selection:bg-emerald-500 selection:text-white min-h-screen flex flex-col">
+
+    <!-- Top Announcement Bar -->
+    <div class="bg-emerald-900 text-emerald-100 text-xs py-2 px-4 text-center font-medium flex items-center justify-center gap-2">
+        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>🌍 Fast Fashion Textile Crisis Solution: Every swapped garment saves an average of <strong>2,700L of water</strong> & <strong>8.5kg CO₂</strong></span>
+    </div>
+
+    <!-- Navigation Header -->
+    <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-3 cursor-pointer" onclick="switchTab('marketplace')">
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-600/20">
+                    <i data-lucide="repeat-2" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <span class="font-display font-extrabold text-2xl tracking-tight text-slate-900 flex items-center gap-1">
+                        Eco<span class="text-emerald-600">Swap</span>
+                    </span>
+                    <span class="block text-[11px] font-medium tracking-wide uppercase text-slate-400">Clothing Barter Network</span>
+                </div>
+            </div>
+
+            <!-- Main Nav Tabs -->
+            <nav class="hidden md:flex items-center gap-1 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80">
+                <button onclick="switchTab('marketplace')" id="nav-btn-marketplace" class="nav-tab active flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+                    <i data-lucide="shopping-bag" class="w-4 h-4"></i> Marketplace
+                </button>
+                <button onclick="switchTab('map')" id="nav-btn-map" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+                    <i data-lucide="map-pin" class="w-4 h-4"></i> Local Map
+                </button>
+                <button onclick="switchTab('tradehub')" id="nav-btn-tradehub" class="nav-tab relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+                    <i data-lucide="arrow-left-right" class="w-4 h-4"></i> Trade Hub
+                    <span id="nav-trade-badge" class="hidden absolute -top-1 -right-1 bg-emerald-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ring-2 ring-white">0</span>
+                </button>
+                <button onclick="switchTab('wardrobe')" id="nav-btn-wardrobe" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+                    <i data-lucide="shirt" class="w-4 h-4"></i> My Wardrobe
+                </button>
+                <button onclick="switchTab('impact')" id="nav-btn-impact" class="nav-tab flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all">
+                    <i data-lucide="leaf" class="w-4 h-4 text-emerald-600"></i> Eco-Impact
+                </button>
+            </nav>
+
+            <!-- User Status & Actions -->
+            <div class="flex items-center gap-3">
+                <!-- Eco Credits Pill -->
+                <div class="hidden sm:flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-xl text-xs font-bold" title="Eco-Credits earned from swaps and listings">
+                    <i data-lucide="sprout" class="w-4 h-4 text-emerald-600"></i>
+                    <span id="user-eco-credits">0</span> Credits
+                </div>
+
+                <!-- Add Clothes Button -->
+                <button onclick="openAddItemModal()" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-md shadow-emerald-600/25 transition-all">
+                    <i data-lucide="plus" class="w-4 h-4 stroke-[3]"></i>
+                    <span class="hidden sm:inline">List an Item</span>
+                </button>
+
+                <!-- Active User Dropdown Switcher (for testing multi-user swapping!) -->
+                <div class="relative">
+                    <button id="user-menu-btn" onclick="toggleUserDropdown()" class="flex items-center gap-2 p-1.5 rounded-xl hover:bg-slate-100 border border-slate-200 transition-all">
+                        <img id="user-avatar" src="" alt="Avatar" class="w-8 h-8 rounded-lg object-cover ring-2 ring-emerald-500/30">
+                        <div class="hidden xl:block text-left text-xs pr-1">
+                            <span id="user-name" class="font-bold text-slate-800 block truncate max-w-[100px]">Loading</span>
+                            <span class="text-[10px] text-emerald-600 font-semibold">Active Profile</span>
+                        </div>
+                        <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400"></i>
+                    </button>
+                    <!-- Dropdown Content -->
+                    <div id="user-dropdown" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 py-2 z-50 animate-in">
+                        <div class="px-4 py-2 border-b border-slate-100">
+                            <p class="text-[11px] font-semibold uppercase text-slate-400">Switch User Persona (Demo)</p>
+                            <p class="text-xs text-slate-500 mt-0.5">Test swaps between different accounts:</p>
+                        </div>
+                        <div id="user-switcher-list" class="divide-y divide-slate-50"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mobile Navigation Row -->
+        <div class="md:hidden flex items-center justify-around bg-slate-50 border-t border-slate-200 px-2 py-2">
+            <button onclick="switchTab('marketplace')" class="mobile-tab text-xs font-semibold p-2 flex flex-col items-center gap-1 text-emerald-700">
+                <i data-lucide="shopping-bag" class="w-4 h-4"></i> Marketplace
+            </button>
+            <button onclick="switchTab('map')" class="mobile-tab text-xs font-semibold p-2 flex flex-col items-center gap-1 text-slate-600">
+                <i data-lucide="map-pin" class="w-4 h-4"></i> Map
+            </button>
+            <button onclick="switchTab('tradehub')" class="mobile-tab text-xs font-semibold p-2 flex flex-col items-center gap-1 text-slate-600 relative">
+                <i data-lucide="arrow-left-right" class="w-4 h-4"></i> Trades
+            </button>
+            <button onclick="switchTab('wardrobe')" class="mobile-tab text-xs font-semibold p-2 flex flex-col items-center gap-1 text-slate-600">
+                <i data-lucide="shirt" class="w-4 h-4"></i> Wardrobe
+            </button>
+            <button onclick="switchTab('impact')" class="mobile-tab text-xs font-semibold p-2 flex flex-col items-center gap-1 text-slate-600">
+                <i data-lucide="leaf" class="w-4 h-4"></i> Impact
+            </button>
+        </div>
+    </header>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- MAIN VIEWPORT CONTAINER -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- ========================================== -->
+        <!-- TAB 1: MARKETPLACE & SWAP EXPLORER -->
+        <!-- ========================================== -->
+        <section id="tab-marketplace" class="space-y-6">
+            <!-- Hero Search & Value Banner -->
+            <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-950 via-slate-900 to-teal-950 text-white p-6 sm:p-10 shadow-2xl">
+                <div class="relative z-10 max-w-2xl">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-xs font-bold uppercase tracking-wider mb-3">
+                        <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Zero-Cash Barter Economy
+                    </span>
+                    <h1 class="font-display font-extrabold text-3xl sm:text-4xl lg:text-5xl tracking-tight leading-tight">
+                        Swap Clothes, <span class="text-emerald-400">Not Currencies.</span>
+                    </h1>
+                    <p class="mt-3 text-slate-300 text-sm sm:text-base leading-relaxed">
+                        Exchange wearable quality fashion directly with verified local swappers. Our smart barter algorithm computes fair trades, while local hubs keep swaps safe and zero-carbon.
+                    </p>
+
+                    <!-- Main Search Input -->
+                    <div class="mt-6 flex flex-col sm:flex-row gap-2">
+                        <div class="relative flex-grow">
+                            <i data-lucide="search" class="w-5 h-5 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                            <input type="text" id="filter-search" oninput="debounceSearch()" placeholder="Search by brand, coat, jeans, wool, vintage..." class="w-full bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder-slate-400 rounded-2xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all">
+                        </div>
+                        <button onclick="applyFilters()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-3 rounded-2xl text-sm transition-all flex items-center justify-center gap-2">
+                            <span>Explore Items</span>
+                            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Decorative Background Element -->
+                <div class="absolute -right-10 -bottom-10 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+            </div>
+
+            <!-- Filter Controls Toolbar -->
+            <div class="bg-white rounded-2xl p-4 sm:p-6 border border-slate-200 shadow-sm space-y-4">
+                <!-- Category Horizontal Scroll -->
+                <div class="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none" id="category-pills">
+                    <!-- Populated dynamically by app.js -->
+                </div>
+
+                <!-- Secondary Filters Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 pt-3 border-t border-slate-100 text-xs">
+                    <!-- Gender -->
+                    <div>
+                        <label class="block font-semibold text-slate-500 mb-1">Gender / Style</label>
+                        <select id="filter-gender" onchange="applyFilters()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+                            <option value="All">All Genders</option>
+                            <option value="Unisex">Unisex</option>
+                            <option value="Women">Women</option>
+                            <option value="Men">Men</option>
+                        </select>
+                    </div>
+
+                    <!-- Size -->
+                    <div>
+                        <label class="block font-semibold text-slate-500 mb-1">Size</label>
+                        <select id="filter-size" onchange="applyFilters()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+                            <option value="All">All Sizes</option>
+                            <option value="XS">XS</option>
+                            <option value="S">S</option>
+                            <option value="M">M</option>
+                            <option value="L">L</option>
+                            <option value="XL">XL</option>
+                            <option value="30/30">30/30</option>
+                            <option value="32/32">32/32</option>
+                            <option value="US 9.5">US 9.5</option>
+                        </select>
+                    </div>
+
+                    <!-- Condition -->
+                    <div>
+                        <label class="block font-semibold text-slate-500 mb-1">Condition Grade</label>
+                        <select id="filter-condition" onchange="applyFilters()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+                            <option value="All">Any Condition</option>
+                            <option value="Brand New with Tags">Brand New with Tags</option>
+                            <option value="Like New">Like New</option>
+                            <option value="Gently Used">Gently Used</option>
+                            <option value="Vintage / Well Loved">Vintage / Well Loved</option>
+                        </select>
+                    </div>
+
+                    <!-- Distance Radius -->
+                    <div>
+                        <div class="flex items-center justify-between font-semibold text-slate-500 mb-1">
+                            <span>Max Distance</span>
+                            <span id="distance-val" class="text-emerald-600 font-bold">25 mi</span>
+                        </div>
+                        <input type="range" id="filter-distance" min="1" max="50" value="25" oninput="updateDistanceLabel(this.value)" onchange="applyFilters()" class="w-full accent-emerald-600 cursor-pointer">
+                    </div>
+
+                    <!-- Sort -->
+                    <div class="col-span-2 sm:col-span-4 lg:col-span-1">
+                        <label class="block font-semibold text-slate-500 mb-1">Sort Items</label>
+                        <select id="filter-sort" onchange="applyFilters()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium">
+                            <option value="newest">Recently Listed</option>
+                            <option value="nearest">Nearest to Me 📍</option>
+                            <option value="value_high">Highest Barter Score</option>
+                            <option value="value_low">Lowest Barter Score</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Swaps Count & Grid Header -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="font-display font-bold text-xl text-slate-900">Available Pre-Loved Clothes</h2>
+                    <p class="text-xs text-slate-500 mt-0.5">Showing direct swap candidates from local community wardrobes</p>
+                </div>
+                <div class="text-xs font-semibold text-slate-500 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+                    <span id="items-count-display">0</span> items found
+                </div>
+            </div>
+
+            <!-- Items Cards Grid -->
+            <div id="items-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <!-- Dynamically populated by app.js -->
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 2: LOCAL INTERACTIVE MAP & ECO HUBS -->
+        <!-- ========================================== -->
+        <section id="tab-map" class="hidden space-y-6">
+            <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                    <div>
+                        <span class="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                            <i data-lucide="navigation" class="w-3.5 h-3.5"></i> Zero Carbon Exchanges
+                        </span>
+                        <h2 class="font-display font-extrabold text-2xl text-slate-900 mt-1">Community Swap Map & Verified Drop Hubs</h2>
+                        <p class="text-slate-500 text-sm">Discover swap items around your neighborhood and safe partner locations to exchange clothes.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl">
+                            <span class="w-3 h-3 rounded-full bg-emerald-500"></span> Available Clothes
+                        </span>
+                        <span class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl">
+                            <span class="w-3 h-3 rounded-full bg-blue-600"></span> Eco Swap Hubs
+                        </span>
+                        <span class="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-xl">
+                            <span class="w-3 h-3 rounded-full bg-purple-600"></span> You
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Interactive Leaflet Map Canvas -->
+                <div id="map-container" class="w-full h-[550px] rounded-2xl overflow-hidden border border-slate-200 shadow-inner z-0"></div>
+
+                <!-- Verified Swap Hubs Directory -->
+                <div class="mt-6">
+                    <h3 class="font-display font-bold text-lg text-slate-900 mb-3">Designated Safe Swap Hubs & Partner Cafes</h3>
+                    <div id="eco-hubs-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <!-- Populated by app.js -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 3: TRADE HUB & NEGOTIATIONS -->
+        <!-- ========================================== -->
+        <section id="tab-tradehub" class="hidden space-y-6">
+            <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                    <div>
+                        <h2 class="font-display font-extrabold text-2xl text-slate-900">Trade Management Hub</h2>
+                        <p class="text-slate-500 text-sm mt-0.5">Track your active barter proposals, coordinate meetups, and confirm physical exchanges.</p>
+                    </div>
+                    <div class="flex items-center gap-2 bg-slate-100 p-1 rounded-2xl">
+                        <button onclick="filterTrades('all')" id="trade-filter-all" class="trade-subtab active text-xs font-bold px-3 py-1.5 rounded-xl transition-all">All</button>
+                        <button onclick="filterTrades('incoming')" id="trade-filter-incoming" class="trade-subtab text-xs font-bold px-3 py-1.5 rounded-xl transition-all">Incoming</button>
+                        <button onclick="filterTrades('outgoing')" id="trade-filter-outgoing" class="trade-subtab text-xs font-bold px-3 py-1.5 rounded-xl transition-all">Outgoing</button>
+                    </div>
+                </div>
+
+                <!-- Trades List Container -->
+                <div id="trades-list" class="mt-6 space-y-4">
+                    <!-- Populated dynamically by app.js -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 4: MY WARDROBE -->
+        <!-- ========================================== -->
+        <section id="tab-wardrobe" class="hidden space-y-6">
+            <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                    <div>
+                        <span class="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider">
+                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Active Wardrobe
+                        </span>
+                        <h2 class="font-display font-extrabold text-2xl text-slate-900 mt-1">My Listed Garments</h2>
+                        <p class="text-slate-500 text-sm mt-0.5">Clothes you've put up for barter. These items are available to offer when proposing swaps!</p>
+                    </div>
+                    <button onclick="openAddItemModal()" class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-2xl text-sm shadow-md shadow-emerald-600/20 transition-all">
+                        <i data-lucide="plus" class="w-4 h-4"></i> Add Clothes to Wardrobe
+                    </button>
+                </div>
+
+                <!-- Wardrobe Items Grid -->
+                <div id="wardrobe-grid" class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <!-- Populated dynamically by app.js -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 5: ECO-IMPACT & FAST FASHION METRICS -->
+        <!-- ========================================== -->
+        <section id="tab-impact" class="hidden space-y-6">
+            <!-- Platform Counters Banner -->
+            <div class="bg-gradient-to-br from-emerald-900 via-teal-900 to-slate-900 text-white rounded-3xl p-6 sm:p-10 shadow-xl">
+                <div class="max-w-3xl">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-xs font-bold uppercase tracking-wider mb-2">
+                        <i data-lucide="globe" class="w-3.5 h-3.5"></i> Collective Circular Impact
+                    </span>
+                    <h2 class="font-display font-extrabold text-3xl sm:text-4xl">Countering the Fast Fashion Crisis</h2>
+                    <p class="mt-2 text-slate-300 text-sm sm:text-base leading-relaxed">
+                        The fashion industry accounts for 10% of global carbon emissions and 20% of global wastewater. Every time you swap instead of buying new, you break the cycle of disposable fashion.
+                    </p>
+                </div>
+
+                <!-- Impact Metrics Grid -->
+                <div class="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-5 text-center">
+                        <div class="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-300 flex items-center justify-center mx-auto mb-2">
+                            <i data-lucide="droplet" class="w-5 h-5"></i>
+                        </div>
+                        <div id="stat-water" class="font-display font-extrabold text-2xl sm:text-3xl text-white">0 L</div>
+                        <div class="text-xs text-slate-300 mt-1 font-medium">Clean Water Preserved</div>
+                    </div>
+
+                    <div class="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-5 text-center">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-300 flex items-center justify-center mx-auto mb-2">
+                            <i data-lucide="cloud-off" class="w-5 h-5"></i>
+                        </div>
+                        <div id="stat-co2" class="font-display font-extrabold text-2xl sm:text-3xl text-white">0 kg</div>
+                        <div class="text-xs text-slate-300 mt-1 font-medium">CO₂ Emissions Diverted</div>
+                    </div>
+
+                    <div class="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-5 text-center">
+                        <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center mx-auto mb-2">
+                            <i data-lucide="package-check" class="w-5 h-5"></i>
+                        </div>
+                        <div id="stat-swaps" class="font-display font-extrabold text-2xl sm:text-3xl text-white">0</div>
+                        <div class="text-xs text-slate-300 mt-1 font-medium">Clothing Swaps Executed</div>
+                    </div>
+
+                    <div class="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-5 text-center">
+                        <div class="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center mx-auto mb-2">
+                            <i data-lucide="trash-2" class="w-5 h-5"></i>
+                        </div>
+                        <div id="stat-landfill" class="font-display font-extrabold text-2xl sm:text-3xl text-white">0 kg</div>
+                        <div class="text-xs text-slate-300 mt-1 font-medium">Textile Waste Saved from Landfill</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tangible Equivalencies Card -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="shower-head" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div id="stat-showers" class="font-display font-extrabold text-2xl text-slate-900">0</div>
+                        <p class="font-semibold text-slate-700 text-sm">8-Minute Showers Equivalent</p>
+                        <p class="text-xs text-slate-500 mt-1">Water saved across all member garment barter exchanges.</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="car" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div id="stat-car-miles" class="font-display font-extrabold text-2xl text-slate-900">0 mi</div>
+                        <p class="font-semibold text-slate-700 text-sm">Car Emissions Offset</p>
+                        <p class="text-xs text-slate-500 mt-1">Equivalent passenger vehicle exhaust avoided by not manufacturing new clothes.</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm flex items-start gap-4">
+                    <div class="w-12 h-12 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="trees" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div id="stat-trees" class="font-display font-extrabold text-2xl text-slate-900">0 days</div>
+                        <p class="font-semibold text-slate-700 text-sm">Tree Absorption Days</p>
+                        <p class="text-xs text-slate-500 mt-1">Daily carbon absorption equivalence by mature trees.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sustainable Fashion Principles -->
+            <div class="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm">
+                <h3 class="font-display font-extrabold text-2xl text-slate-900 mb-6">How Bartering Combats Fast Fashion</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
+                        <div class="text-emerald-600 font-bold text-sm flex items-center gap-2">
+                            <i data-lucide="check" class="w-4 h-4"></i> 1. Keeps Pre-Loved Garments in Rotation
+                        </div>
+                        <p class="text-xs text-slate-600 leading-relaxed">
+                            Extending the life of a garment by just 9 months reduces its carbon, water, and waste footprints by around 20-30% each.
+                        </p>
+                    </div>
+                    <div class="p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
+                        <div class="text-emerald-600 font-bold text-sm flex items-center gap-2">
+                            <i data-lucide="check" class="w-4 h-4"></i> 2. Eliminate Fast-Fashion Impulse Buys
+                        </div>
+                        <p class="text-xs text-slate-600 leading-relaxed">
+                            Barter values the intrinsic craftsmanship and quality of materials (wool, raw denim, linen) over fleeting synthetic fast-fashion micro-trends.
+                        </p>
+                    </div>
+                    <div class="p-5 rounded-2xl bg-slate-50 border border-slate-100 space-y-2">
+                        <div class="text-emerald-600 font-bold text-sm flex items-center gap-2">
+                            <i data-lucide="check" class="w-4 h-4"></i> 3. Hyperlocal Zero-Emissions Swapping
+                        </div>
+                        <p class="text-xs text-slate-600 leading-relaxed">
+                            Instead of air-shipping single items in non-recyclable plastic mailers, members swap in-person at neighborhood coffee shops and community library hubs.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ========================================== -->
+    <!-- MODAL 1: PROPOSE SWAP & FAIRNESS MATCHER -->
+    <!-- ========================================== -->
+    <div id="modal-propose-swap" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto animate-fade">
+        <div class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-8">
+            <!-- Modal Header -->
+            <div class="bg-slate-900 text-white p-6 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <i data-lucide="repeat-2" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-display font-bold text-xl">Propose Clothing Barter</h3>
+                        <p class="text-xs text-slate-400">Our engine compares item values to ensure balanced trades</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('modal-propose-swap')" class="text-slate-400 hover:text-white p-1 rounded-xl transition-all">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- Modal Content Grid -->
+            <div class="p-6 sm:p-8 space-y-6">
+                <!-- Two-Column Item Comparison -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                    <!-- Column Left: Select Your Item -->
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-display font-bold text-sm text-slate-900 flex items-center gap-1.5">
+                                <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">1</span>
+                                Choose Item from Your Wardrobe
+                            </h4>
+                            <span class="text-[11px] text-slate-400 font-medium">Ranked by fairness</span>
+                        </div>
+
+                        <!-- Wardrobe Selector List -->
+                        <div id="propose-wardrobe-list" class="space-y-2 max-h-72 overflow-y-auto pr-1">
+                            <!-- Populated with fair match percentages by app.js -->
+                        </div>
+                    </div>
+
+                    <!-- Column Right: Target Item Being Requested -->
+                    <div class="space-y-3">
+                        <h4 class="font-display font-bold text-sm text-slate-900 flex items-center gap-1.5">
+                            <span class="w-5 h-5 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center text-xs font-bold">2</span>
+                            Target Garment You Want
+                        </h4>
+
+                        <div id="propose-target-card" class="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex gap-4">
+                            <!-- Populated by app.js -->
+                        </div>
+
+                        <!-- Live Barter Equivalence Gauge -->
+                        <div id="equivalence-box" class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-emerald-900 uppercase tracking-wide">Equivalence Meter</span>
+                                <span id="fairness-pct-badge" class="bg-emerald-600 text-white text-xs font-extrabold px-2 py-0.5 rounded-lg">94% Fair Match</span>
+                            </div>
+                            <!-- Gauge Progress Bar -->
+                            <div class="w-full bg-emerald-200 h-2.5 rounded-full overflow-hidden">
+                                <div id="fairness-bar" class="bg-emerald-600 h-full rounded-full transition-all duration-500" style="width: 94%;"></div>
+                            </div>
+                            <p id="fairness-advice" class="text-xs text-emerald-800 leading-snug font-medium pt-1">
+                                Both garments share equivalent barter utility. This is an optimal 1:1 trade!
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Terms & Meetup Details -->
+                <div class="border-t border-slate-100 pt-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-semibold text-xs text-slate-600 mb-1">Optional Sweetener (Eco-Credits)</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" id="propose-credits" min="0" max="50" value="0" class="w-24 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <span class="text-xs text-slate-500">Credits to bridge score gap</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-xs text-slate-600 mb-1">Preferred Meetup Location</label>
+                        <select id="propose-location" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="Green District Textile Library & Hub">Green District Textile Hub (Capitol Hill)</option>
+                            <option value="Fremont Sustainable Coffee & Trade Bar">Fremont Sustainable Coffee Bar</option>
+                            <option value="Ballard Community Center Circular Room">Ballard Community Center</option>
+                            <option value="Queen Anne Eco-Loft">Queen Anne Eco-Loft</option>
+                            <option value="Public Transit Metro Station">Public Transit Metro Station</option>
+                        </select>
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label class="block font-semibold text-xs text-slate-600 mb-1">Message to Swapper</label>
+                        <textarea id="propose-note" rows="2" placeholder="Hi! I love your piece and have been looking for this size. Can meet anytime this weekend!" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+                    </div>
+                </div>
+
+                <!-- Footer Actions -->
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                    <button onclick="closeModal('modal-propose-swap')" class="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all">Cancel</button>
+                    <button onclick="submitSwapProposal()" class="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-2">
+                        <i data-lucide="send" class="w-4 h-4"></i> Send Swap Proposal
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 2: ITEM INSPECT / DETAIL MODAL -->
+    <!-- ========================================== -->
+    <div id="modal-item-detail" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto animate-fade">
+        <div class="bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-8">
+            <div id="item-detail-content">
+                <!-- Dynamically populated by app.js -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 3: LIST NEW ITEM (WARDROBE FORM) -->
+    <!-- ========================================== -->
+    <div id="modal-add-item" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto animate-fade">
+        <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-8">
+            <!-- Header -->
+            <div class="bg-slate-900 text-white p-6 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <i data-lucide="shirt" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-display font-bold text-xl">List Garment for Barter</h3>
+                        <p class="text-xs text-slate-400">Earn +15 Eco-Credits instantly for listing wearable clothes</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('modal-add-item')" class="text-slate-400 hover:text-white p-1 rounded-xl transition-all">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- Form -->
+            <form onsubmit="handleAddItemSubmit(event)" class="p-6 sm:p-8 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="sm:col-span-2">
+                        <label class="block font-semibold text-xs text-slate-700 mb-1">Item Title *</label>
+                        <input type="text" id="add-title" required placeholder="e.g. Patagonia Synchilla Fleece or Vintage 501 Jeans" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-xs text-slate-700 mb-1">Category *</label>
+                        <select id="add-category" onchange="calculateLiveScore()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="Jackets & Coats">Jackets & Coats</option>
+                            <option value="Sweaters & Knits">Sweaters & Knits</option>
+                            <option value="Tops & Shirts">Tops & Shirts</option>
+                            <option value="Pants & Jeans">Pants & Jeans</option>
+                            <option value="Dresses & Jumpsuits">Dresses & Jumpsuits</option>
+                            <option value="Shoes">Shoes</option>
+                            <option value="Accessories">Accessories</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-xs text-slate-700 mb-1">Size *</label>
+                        <input type="text" id="add-size" required placeholder="e.g. M, L, 32/32, US 10" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-xs text-slate-700 mb-1">Brand</label>
+                        <input type="text" id="add-brand" oninput="calculateLiveScore()" placeholder="e.g. Everlane, Levi's, Sézane" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-xs text-slate-700 mb-1">Condition Grade *</label>
+                        <select id="add-condition" onchange="calculateLiveScore()" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="Brand New with Tags">Brand New with Tags</option>
+                            <option value="Like New" selected>Like New</option>
+                            <option value="Gently Used">Gently Used</option>
+                            <option value="Vintage / Well Loved">Vintage / Well Loved</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-xs text-slate-700 mb-1">Material Composition</label>
+                        <input type="text" id="add-material" oninput="calculateLiveScore()" placeholder="e.g. 100% Wool, Organic Cotton, Linen, Denim" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-xs text-slate-700 mb-1">Estimated Retail Value ($)</label>
+                        <input type="number" id="add-value" oninput="calculateLiveScore()" min="10" max="800" value="75" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label class="block font-semibold text-xs text-slate-700 mb-1">Swap Wishlist / What are you looking for?</label>
+                        <input type="text" id="add-preference" placeholder="e.g. Looking for chunky knits, trench coat, or open to fair trades" class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label class="block font-semibold text-xs text-slate-700 mb-1">Image URL</label>
+                        <div class="flex gap-2">
+                            <input type="url" id="add-image" value="https://images.unsplash.com/photo-1523381210434-271e8be1f52b?w=800&auto=format&fit=crop&q=80" class="flex-grow bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                            <button type="button" onclick="cycleSamplePhoto()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap">
+                                🎲 Preset Photo
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="sm:col-span-2">
+                        <label class="block font-semibold text-xs text-slate-700 mb-1">Description & Story</label>
+                        <textarea id="add-description" rows="2" placeholder="Tell other swappers about the fit, care history, and condition..." class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+                    </div>
+                </div>
+
+                <!-- Live Computed Barter Score Preview -->
+                <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between">
+                    <div>
+                        <span class="text-xs font-bold text-emerald-900 block">Computed Barter Score</span>
+                        <span class="text-[11px] text-emerald-700">Calculated based on material, brand tier, and condition</span>
+                    </div>
+                    <div class="text-right">
+                        <span id="live-barter-score" class="font-display font-extrabold text-2xl text-emerald-700">68.0</span>
+                        <span class="text-[10px] block font-bold text-emerald-600 uppercase">Barter Score</span>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="closeModal('modal-add-item')" class="px-5 py-2.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
+                    <button type="submit" class="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-600/20 flex items-center gap-2">
+                        <i data-lucide="check" class="w-4 h-4"></i> List Item (+15 Credits)
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- MODAL 4: SWAP CHAT & MEETUP DETAILS -->
+    <!-- ========================================== -->
+    <div id="modal-swap-chat" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto animate-fade">
+        <div class="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-8 flex flex-col h-[600px]">
+            <!-- Header -->
+            <div class="bg-slate-900 text-white p-5 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                        <i data-lucide="message-circle" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 id="chat-modal-title" class="font-display font-bold text-lg">Swap Coordination</h3>
+                        <p id="chat-modal-subtitle" class="text-xs text-slate-400">Safe Meetup Chat & Handshake</p>
+                    </div>
+                </div>
+                <button onclick="closeModal('modal-swap-chat')" class="text-slate-400 hover:text-white p-1 rounded-xl">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- Chat Messages Log -->
+            <div id="chat-messages-container" class="flex-grow p-6 overflow-y-auto space-y-3 bg-slate-50">
+                <!-- Populated dynamically by app.js -->
+            </div>
+
+            <!-- Meetup Actions & Message Input -->
+            <div class="p-4 bg-white border-t border-slate-200 space-y-3">
+                <div class="flex gap-2">
+                    <input type="text" id="chat-input" onkeydown="handleChatKey(event)" placeholder="Type a message (e.g. Can meet at 3 PM at the coffee bar!)..." class="flex-grow bg-slate-100 border border-slate-200 rounded-xl px-4 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    <button onclick="sendChatMessage()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm">
+                        <i data-lucide="send" class="w-3.5 h-3.5"></i> Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 mt-12 py-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <span class="font-semibold text-slate-700">EcoSwap Sustainable Fashion Engine</span> • Countering fast fashion textile waste
+            </div>
+            <div>
+                Built for sustainable peer-to-peer barter • Ready for GitHub deployment
+            </div>
+        </div>
+    </footer>
+
+    <!-- App JavaScript -->
+    <script src="/static/js/map.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
