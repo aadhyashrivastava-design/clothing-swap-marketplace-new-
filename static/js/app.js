@@ -1,3 +1,8 @@
+function safeCreateIcons() {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        try { window.lucide.createIcons(); } catch(e) {}
+    }
+}
 // EcoSwap Main Application Frontend Controller
 
 let currentUser = null;
@@ -46,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadSwaps();
     await loadEcoHubs();
     await loadEcoImpact();
-    lucide.createIcons();
+    safeCreateIcons();
 });
 
 // ==========================================
@@ -91,7 +96,7 @@ function renderUserDropdown() {
             ${u.id === currentUser?.id ? '<i data-lucide="check" class="w-3.5 h-3.5 text-emerald-600"></i>' : ''}
         </button>
     `).join('');
-    lucide.createIcons();
+    safeCreateIcons();
 }
 
 function toggleUserDropdown() {
@@ -153,7 +158,7 @@ function switchTab(tabName) {
     } else if (tabName === 'impact') {
         loadEcoImpact();
     }
-    lucide.createIcons();
+    safeCreateIcons();
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -243,7 +248,7 @@ function renderMarketplaceGrid(items) {
                 </button>
             </div>
         `;
-        lucide.createIcons();
+        safeCreateIcons();
         return;
     }
 
@@ -317,7 +322,7 @@ function renderMarketplaceGrid(items) {
         </div>
     `).join('');
 
-    lucide.createIcons();
+    safeCreateIcons();
 }
 
 function resetFilters() {
@@ -404,7 +409,7 @@ async function openProposeSwapModal(targetItemId) {
         }
 
         openModal('modal-propose-swap');
-        lucide.createIcons();
+        safeCreateIcons();
     } catch (err) {
         console.error(err);
         showToast('Error preparing trade proposal', 'error');
@@ -535,7 +540,7 @@ function renderTradesList() {
                 </button>
             </div>
         `;
-        lucide.createIcons();
+        safeCreateIcons();
         return;
     }
 
@@ -644,7 +649,7 @@ function renderTradesList() {
         `;
     }).join('');
 
-    lucide.createIcons();
+    safeCreateIcons();
 }
 
 async function handleSwapAction(swapId, action) {
@@ -769,7 +774,7 @@ function renderWardrobeGrid(items) {
                 </button>
             </div>
         `;
-        lucide.createIcons();
+        safeCreateIcons();
         return;
     }
 
@@ -800,7 +805,7 @@ function renderWardrobeGrid(items) {
         </div>
     `).join('');
 
-    lucide.createIcons();
+    safeCreateIcons();
 }
 
 async function deleteWardrobeItem(itemId) {
@@ -958,7 +963,7 @@ async function openItemDetailModal(itemId) {
             </div>
         `;
         openModal('modal-item-detail');
-        lucide.createIcons();
+        safeCreateIcons();
     } catch (err) {
         showToast('Error opening item details', 'error');
     }
@@ -1049,7 +1054,7 @@ function showToast(message, type = 'info') {
     `;
 
     container.appendChild(toast);
-    lucide.createIcons();
+    safeCreateIcons();
 
     setTimeout(() => {
         toast.style.opacity = '0';

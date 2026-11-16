@@ -550,6 +550,6 @@ def get_eco_impact():
     })
 
 if __name__ == '__main__':
-    print("Starting EcoSwap - Clothing Exchange & Swap Marketplace...")
-    print("Visit http://127.0.0.1:5000 in your browser.")
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    port = int(os.environ.get('PORT', 5000))
+    print(f"Starting EcoSwap on http://127.0.0.1:{port} and http://localhost:{port} ...")
+    app.run(host='0.0.0.0', port=port, debug=False)

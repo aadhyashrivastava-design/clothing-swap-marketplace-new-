@@ -9,6 +9,12 @@ function initMap(userLat = 47.6150, userLon = -122.3200) {
     const container = document.getElementById('map-container');
     if (!container) return;
 
+    if (typeof L === 'undefined') {
+        console.warn('Leaflet map library is not loaded');
+        container.innerHTML = '<div class="flex items-center justify-center h-full text-slate-400 text-xs font-semibold">Interactive map view active (Leaflet loading...)</div>';
+        return;
+    }
+
     if (mapInstance) {
         mapInstance.invalidateSize();
         return;
@@ -19,7 +25,7 @@ function initMap(userLat = 47.6150, userLon = -122.3200) {
 
     // Clean Tile Layer from OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        attribution: '&copy; OpenStreetMap contributors',
         maxZoom: 18,
     }).addTo(mapInstance);
 
